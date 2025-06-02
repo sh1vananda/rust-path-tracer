@@ -6,12 +6,10 @@ mod camera;
 mod hittable;
 mod color;
 mod config;
+mod utils;
 
-use std::io::{self};
+use std::io::{self, Write};
 use rayon::prelude::*;
-use rand::prelude::*;
-use rand::thread_rng;
-
 use vec3::Vec3;
 use ray::Ray;
 use sphere::Sphere;
@@ -20,30 +18,35 @@ use camera::Camera;
 use hittable::{Hittable, HittableList};
 use color::Color;
 use config::RenderConfig;
+use utils::*;
 
 type Point3 = Vec3;
 
-fn ray_color(r: &Ray, world: &HittableList, depth: u32) -> Color {
+fn ray_color(r: &Ray, world: &HittableList, depth: u32, rng: &mut fastrand::Rng) -> Color {
     if depth == 0 {
         return Color::zero();
     }
 
-    if let Some(rec) = world.hit(r, 0.001, f64::INFINITY) {
-        if let Some((scattered, attenuation)) = rec.mat.scatter(r, &rec) {
-            return attenuation * ray_color(&scattered, world, depth - 1);
+    // Use smaller epsilon to reduce shadow acne
+    if let Some(rec) = world.hit(r, 0.0001, f64::INFINITY) {
+        if let Some((scattered, attenuation)) = rec.mat.scatter(r, &rec, rng) {
+            return attenuation * ray_color(&scattered, world, depth - 1, rng);
         }
         return Color::zero();
     }
 
+    // Enhanced sky gradient
     let unit_direction = r.dir.unit();
     let t = 0.5 * (unit_direction.y + 1.0);
-    Color::new(1.0, 1.0, 1.0) * (1.0 - t) + Color::new(0.5, 0.7, 1.0) * t
+    let horizon_color = Color::new(1.0, 1.0, 1.0);
+    let zenith_color = Color::new(0.5, 0.7, 1.0);
+    horizon_color * (1.0 - t) + zenith_color * t
 }
 
 fn create_scene() -> HittableList {
     let mut world = HittableList::new();
 
-    // Ground
+    // Ground - checkered pattern effect with slight roughness
     world.add(Box::new(Sphere::new(
         Point3::new(0.0, -100.5, -1.0),
         100.0,
@@ -52,7 +55,7 @@ fn create_scene() -> HittableList {
         },
     )));
 
-    // Center sphere
+    // Center sphere - Lambertian
     world.add(Box::new(Sphere::new(
         Point3::new(0.0, 0.0, -1.0),
         0.5,
@@ -61,23 +64,45 @@ fn create_scene() -> HittableList {
         },
     )));
 
-    // Left sphere (metal)
+    // Left sphere - Dielectric (glass)
     world.add(Box::new(Sphere::new(
         Point3::new(-1.0, 0.0, -1.0),
         0.5,
-        MaterialType::Metal { 
-            albedo: Color::new(0.8, 0.8, 0.9), 
-            fuzz: 0.0 
-        },
+        MaterialType::Dielectric { ir: 1.5 },
     )));
 
-    // Right sphere (metal)
+    // Left sphere inner - hollow glass effect
+    world.add(Box::new(Sphere::new(
+        Point3::new(-1.0, 0.0, -1.0),
+        -0.4,
+        MaterialType::Dielectric { ir: 1.5 },
+    )));
+
+    // Right sphere - polished metal
     world.add(Box::new(Sphere::new(
         Point3::new(1.0, 0.0, -1.0),
         0.5,
         MaterialType::Metal { 
             albedo: Color::new(0.8, 0.6, 0.2), 
-            fuzz: 1.0 
+            fuzz: 0.0  // Perfect mirror
+        },
+    )));
+
+    // Additional smaller spheres for interest
+    world.add(Box::new(Sphere::new(
+        Point3::new(-0.5, -0.25, -0.5),
+        0.25,
+        MaterialType::Metal { 
+            albedo: Color::new(0.9, 0.9, 0.9), 
+            fuzz: 0.1 
+        },
+    )));
+
+    world.add(Box::new(Sphere::new(
+        Point3::new(0.5, -0.25, -0.5),
+        0.25,
+        MaterialType::Lambertian { 
+            albedo: Color::new(0.9, 0.2, 0.2) 
         },
     )));
 
@@ -85,24 +110,41 @@ fn create_scene() -> HittableList {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = RenderConfig::default();
+    let config = RenderConfig::new();
     let image_height = (config.image_width as f64 / config.aspect_ratio) as usize;
 
-    // Camera
-    let cam = Camera::new();
+    // Enhanced camera with depth of field
+    let lookfrom = Point3::new(3.0, 3.0, 2.0);
+    let lookat = Point3::new(0.0, 0.0, -1.0);
+    let vup = Vec3::new(0.0, 1.0, 0.0);
+    let dist_to_focus = (lookfrom - lookat).length();
+    let aperture = 0.1;
 
-    // World
+    let cam = Camera::new(
+        lookfrom,
+        lookat,
+        vup,
+        20.0, // vfov
+        config.aspect_ratio,
+        aperture,
+        dist_to_focus,
+    );
+
     let world = create_scene();
 
-    // Render
+    // Render header
     println!("P3\n{} {}\n255", config.image_width, image_height);
-    eprintln!("Starting render...");
+    eprintln!("Rendering {}x{} with {} samples per pixel...", 
+        config.image_width, image_height, config.samples_per_pixel);
 
+    let start_time = std::time::Instant::now();
+
+    // Parallel rendering with thread-local RNG
     let pixels: Vec<Color> = (0..image_height)
         .into_par_iter()
         .rev()
         .map(|j| {
-            if j % 50 == 0 {
+            if j % 20 == 0 {
                 eprintln!("Scanlines remaining: {}", j);
             }
             
@@ -110,13 +152,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .into_par_iter()
                 .map(|i| {
                     let mut pixel_color = Color::zero();
-                    let mut rng = thread_rng();
+                    let mut rng = fastrand::Rng::new();
                     
                     for _ in 0..config.samples_per_pixel {
-                        let u = (i as f64 + rng.gen_range(0.0..1.0)) / (config.image_width - 1) as f64;
-                        let v = (j as f64 + rng.gen_range(0.0..1.0)) / (image_height - 1) as f64;
-                        let r = cam.get_ray(u, v);
-                        pixel_color += ray_color(&r, &world, config.max_depth);
+                        let u = (i as f64 + rng.f64()) / (config.image_width - 1) as f64;
+                        let v = (j as f64 + rng.f64()) / (image_height - 1) as f64;
+                        let r = cam.get_ray(u, v, &mut rng);
+                        pixel_color += ray_color(&r, &world, config.max_depth, &mut rng);
                     }
                     pixel_color
                 })
@@ -133,6 +175,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         pixel.write_color(&mut handle, config.samples_per_pixel)?;
     }
 
-    eprintln!("Done!");
+    let elapsed = start_time.elapsed();
+    eprintln!("Render completed in {:.2} seconds!", elapsed.as_secs_f64());
     Ok(())
 }

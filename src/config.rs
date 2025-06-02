@@ -5,13 +5,28 @@ pub struct RenderConfig {
     pub max_depth: u32,
 }
 
-impl Default for RenderConfig {
-    fn default() -> Self {
+impl RenderConfig {
+    pub fn new() -> Self {
         Self {
-            image_width: 400,
-            aspect_ratio: 16.0 / 9.0,
-            samples_per_pixel: 100,
+            image_width: 800,  // Higher resolution
+            aspect_ratio: 3.0 / 2.0,
+            samples_per_pixel: 500,  // More samples for quality
             max_depth: 50,
         }
+    }
+
+    pub fn quick() -> Self {
+        Self {
+            image_width: 400,
+            aspect_ratio: 3.0 / 2.0,
+            samples_per_pixel: 100,
+            max_depth: 20,
+        }
+    }
+}
+
+impl Default for RenderConfig {
+    fn default() -> Self {
+        Self::quick()
     }
 }

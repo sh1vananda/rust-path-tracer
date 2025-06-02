@@ -1,6 +1,6 @@
-C:\Users\cyber\Downloads\PROJECTS\path-tracer\target\debug\deps\raytracer.d: src\main.rs src\vec3.rs src\ray.rs src\sphere.rs src\material.rs src\camera.rs src\hittable.rs src\color.rs src\config.rs
+C:\Users\cyber\Downloads\PROJECTS\path-tracer\target\debug\deps\raytracer.d: src\main.rs src\vec3.rs src\ray.rs src\sphere.rs src\material.rs src\camera.rs src\hittable.rs src\color.rs src\config.rs src\utils.rs
 
-C:\Users\cyber\Downloads\PROJECTS\path-tracer\target\debug\deps\raytracer.exe: src\main.rs src\vec3.rs src\ray.rs src\sphere.rs src\material.rs src\camera.rs src\hittable.rs src\color.rs src\config.rs
+C:\Users\cyber\Downloads\PROJECTS\path-tracer\target\debug\deps\raytracer.exe: src\main.rs src\vec3.rs src\ray.rs src\sphere.rs src\material.rs src\camera.rs src\hittable.rs src\color.rs src\config.rs src\utils.rs
 
 src\main.rs:
 src\vec3.rs:
@@ -11,3 +11,4 @@ src\camera.rs:
 src\hittable.rs:
 src\color.rs:
 src\config.rs:
+src\utils.rs:
