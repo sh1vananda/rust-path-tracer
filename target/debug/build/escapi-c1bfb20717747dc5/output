@@ -1,0 +1,17 @@
+OPT_LEVEL = Some("0")
+TARGET = Some("x86_64-pc-windows-msvc")
+HOST = Some("x86_64-pc-windows-msvc")
+TARGET = Some("x86_64-pc-windows-msvc")
+TARGET = Some("x86_64-pc-windows-msvc")
+HOST = Some("x86_64-pc-windows-msvc")
+CXX_x86_64-pc-windows-msvc = None
+CXX_x86_64_pc_windows_msvc = None
+HOST_CXX = None
+CXX = None
+TARGET = Some("x86_64-pc-windows-msvc")
+HOST = Some("x86_64-pc-windows-msvc")
+CXXFLAGS_x86_64-pc-windows-msvc = None
+CXXFLAGS_x86_64_pc_windows_msvc = None
+HOST_CXXFLAGS = None
+CXXFLAGS = None
+DEBUG = Some("true")
